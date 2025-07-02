@@ -1,0 +1,6 @@
+# .gitignore
+
+# 빌드 및 캐시 파일
+__pycache__/
+*.pyc
+functional_hand_type/gibson/ckpts/
