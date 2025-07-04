@@ -1,3 +1,4 @@
+
 from os import path
 import os
 import sys
@@ -195,12 +196,15 @@ class MHAVhands(object):
                     )
 
                     image_names.append(relative_img_path)
+
+                    
                     sample_infos.append({
                         "subject": subject,
                         "action_name": action_name,
                         "frame_idx": iidx,
                         "seq_idx" : seq_idx_counter,
-                       
+                        "detail_action_name": name
+                    
                     })
 
                     action_idx = self.action_info[action_name]["action_idx"]
@@ -275,9 +279,9 @@ class MHAVhands(object):
         idx = self.get_dataidx(idx)
         img_path = self.image_names[idx]
         path_info = img_path.split('/')
-        scene = path_info[4]
-        subject = path_info[5]
-        sequence = path_info[6]
+        scene = path_info[5]
+        subject = path_info[6]
+        sequence = path_info[7]
         frame_number = int(path_info[-1].split('.')[0].split('_')[-1])
 
         both_labels = []
@@ -422,8 +426,6 @@ class MHAVhands(object):
 
 
         # 필요하면 joints2d, jointsabs25d 등도 여기에 추가 가능
-        
-        print("여긴가")
-        print(sample.shape)
+    
 
         return sample

@@ -23,7 +23,7 @@ HAND_CONNECTIONS = [
 
 def process_and_visualize_all_folders():
     # --- ⚙️ 사용자가 설정할 부분 ⚙️ ---
-    base_input_folder = "/media/kcy/new_vol/DI_hdd/BMVC/data_MHAV"
+    base_input_folder = "/media/kcy/3A72CA7272CA3285/data_MHAV"
     # ------------------------------------
 
     print("모델을 초기화합니다. 잠시만 기다려 주세요...")

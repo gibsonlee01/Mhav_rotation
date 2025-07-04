@@ -73,7 +73,23 @@ class TemporalNet(torch.nn.Module):
 
         self.is_single_hand=is_single_hand
         self.num_joints=21 if self.is_single_hand else 42
+        
+        
+        # 1-1. 회전 특징을 위한 인코더 추가
+        # 입력: 500 (npy 원본 길이), 출력: 128 (임베딩 차원)
+        self.rotation_encoder = MultiLayerPerceptron(
+            base_neurons=[500, 256, 128],
+            out_dim=128,
+            act_hidden='leakyrelu',
+            act_final='none' # 정규화는 Triplet Loss 전에 하는 것이 일반적
+        )
+        self.final_feature_fusion_layer = torch.nn.Linear(
+            transformer_d_model + 128, transformer_d_model
+        )
 
+        # 1-2. Triplet Loss 함수와 가중치(lambda) 정의
+        self.triplet_loss = torch.nn.TripletMarginLoss(margin=1.0, p=2)
+        self.lambda_contrastive_loss = 0.3 # 튜닝이 필요한 하이퍼파라미터
         
         # Feature Extraction
         self.meshregnet = ResNet_(resnet_version=18)
@@ -135,6 +151,8 @@ class TemporalNet(torch.nn.Module):
 
     def forward(self, batch_flatten, epoch=0, train=True, verbose=False):
         flatten_images=batch_flatten[TransQueries.IMAGE].cuda()
+        rotation_features = batch_flatten[TransQueries.ROTATION_FEATURE].cuda()
+        
                 
         #Loss
         total_loss = torch.Tensor([0]).cuda()
@@ -198,7 +216,10 @@ class TemporalNet(torch.nn.Module):
             )
         results.update(hlabel_results)
         losses.update(hlabel_losses)
-    
+        
+        #Rotation contrastive
+        rotation_embedding = self.rotation_encoder(rotation_features)
+
         # ======== Egocentric Action Module ========
         # flatten_hpose2d=torch.flatten(flatten_hpose[:,:,:2],1,2)
         # flatten_ain_feature_hpose=self.hand_pose3d_to_action_input(flatten_hpose2d) # flatten_ain_feature_hpose shape : (B * 128, 512)
@@ -209,10 +230,18 @@ class TemporalNet(torch.nn.Module):
         
         flatten_ain_feature=torch.cat((flatten_pout_feature,flatten_ain_feature_olabel),dim=1)
         flatten_ain_feature=self.concat_to_action_input(flatten_ain_feature) # (B * 128, 512)
+        
 
         # if train:
         flatten_ain_feature=torch.cat((flatten_ain_feature, flatten_ain_feature_hlabel_txt), dim=1) # (B * 128, 1024)
         flatten_ain_feature=self.hlabel_concat_to_action_input(flatten_ain_feature)
+        
+        #ROTATION CONCAT
+        expanded_rotation_embedding = rotation_embedding.unsqueeze(1).expand(-1, self.ntokens_action, -1)
+        flatten_rotation_embedding = expanded_rotation_embedding.reshape(-1, 128)
+        flatten_ain_feature = torch.cat((flatten_ain_feature, flatten_rotation_embedding), dim=1)
+        flatten_ain_feature = self.final_feature_fusion_layer(flatten_ain_feature)
+
         batch_seq_ain_feature=flatten_ain_feature.contiguous().view(-1,self.ntokens_action,flatten_ain_feature.shape[-1])
         
         # Concat trainable token
@@ -237,9 +266,24 @@ class TemporalNet(torch.nn.Module):
         
         results.update(action_results)
         losses.update(action_losses)
+        
+        # --- ✅ 2. Contrastive Loss 계산 (이 위치로 이동) ---
+        
+        if train:
+            anchor, positive, negative = self._get_triplets_from_batch(
+                embeddings=torch.nn.functional.normalize(rotation_embedding, p=2, dim=1),
+                labels=action_results["action_gt_labels"] # 정상적으로 사용 가능
+            )
+            
+            if anchor is not None:
+                contrastive_loss = self.triplet_loss(anchor, positive, negative)
+                total_loss += self.lambda_contrastive_loss * contrastive_loss
+                losses["contrastive_loss"] = contrastive_loss.detach()
+                
     
         return total_loss, results, losses
-    
+        
+        
     # def recover_hand(self, flatten_sample, flatten_hpose_25d_3d, weights, total_loss,verbose=False):
     #     hand_results, hand_losses={},{}
         
@@ -367,3 +411,45 @@ class TemporalNet(torch.nn.Module):
         action_losses["action_loss"]=action_loss
         return action_results, total_loss, action_losses
 
+    def _get_triplets_from_batch(self, embeddings, labels):
+        """
+        배치 내에서 Hard Triplet을 구성하는 헬퍼 함수.
+        (Anchor-Positive 거리는 최대로, Anchor-Negative 거리는 최소로)
+        """
+        # embeddings: (B, 128), labels: (B,)
+        dist_matrix = torch.cdist(embeddings, embeddings, p=2) # 유클리드 거리 행렬 계산
+        
+        anchors, positives, negatives = [], [], []
+        
+        for i in range(len(labels)):
+            anchor_label = labels[i]
+            
+            # --- Positive 찾기 ---
+            # 자기 자신을 제외하고 라벨이 같은 샘플들
+            positive_mask = (labels == anchor_label) & (torch.arange(len(labels), device=labels.device) != i)
+            if not torch.any(positive_mask):
+                continue # Positive 후보가 없으면 건너뛰기
+
+            # 같은 라벨 샘플 중 가장 거리가 먼 샘플 (Hard Positive)
+            positive_dists = dist_matrix[i][positive_mask]
+            hardest_positive_idx = torch.where(positive_mask)[0][torch.argmax(positive_dists)]
+            
+            # --- Negative 찾기 ---
+            # 라벨이 다른 모든 샘플들
+            negative_mask = (labels != anchor_label)
+            if not torch.any(negative_mask):
+                continue # Negative 후보가 없으면 건너뛰기
+
+            # 다른 라벨 샘플 중 가장 거리가 가까운 샘플 (Hard Negative)
+            negative_dists = dist_matrix[i][negative_mask]
+            hardest_negative_idx = torch.where(negative_mask)[0][torch.argmin(negative_dists)]
+            
+            # 유효한 Triplet 쌍 추가
+            anchors.append(embeddings[i])
+            positives.append(embeddings[hardest_positive_idx])
+            negatives.append(embeddings[hardest_negative_idx])
+
+        if not anchors:
+            return None, None, None
+            
+        return torch.stack(anchors), torch.stack(positives), torch.stack(negatives)

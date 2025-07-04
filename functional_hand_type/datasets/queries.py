@@ -31,6 +31,7 @@ class TransQueries(Enum):
     ROTMAT = auto()
     ACTIONIDX = auto()
     OBJIDX=auto()
+    ROTATION_FEATURE = auto()
 
     
     JOINTSABS25D=auto()

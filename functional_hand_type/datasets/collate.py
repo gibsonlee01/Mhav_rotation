@@ -8,33 +8,6 @@ from torch.utils.data._utils.collate import default_collate
 from datasets.queries import BaseQueries, TransQueries 
 np_str_obj_array_pattern = re.compile(r"[SaUO]") 
 
-# def meshreg_collate(batch, extend_queries=None):
-#     """
-#     Collate function, duplicating the items in extend_queries along the
-#     first dimension so that they all have the same length.
-#     Typically applies to faces and vertices, which have different sizes
-#     depending on the object.
-#     """
-
-#     pop_queries = []
-#     # meshreg_collate 내부에서:
-#     if pop_query == BaseQueries.OBJIDX:
-#         continue  # skip auto-merge for obj_idx
-
-#     for poppable_query in extend_queries:
-#         if poppable_query in batch[0]:
-#             pop_queries.append(poppable_query)
-
-#     # Remove fields that don't have matching sizes
-#     for pop_query in pop_queries:
-#         max_size = max([sample[pop_query].shape[0] for sample in batch])
-#         for sample in batch:
-#             pop_value = sample[pop_query]
-#             # Repeat vertices so all have the same number
-#             pop_value = np.concatenate([pop_value] * int(max_size / pop_value.shape[0] + 1))[:max_size]
-#             sample[pop_query] = pop_value
-#     batch = default_collate(batch)
-#     return batch
 
 def meshreg_collate(batch, extend_queries=None):
     """
@@ -92,3 +65,26 @@ def seq_extend_flatten_collate(seq, extend_queries=None):
         for seq_idx in range(seq_len):
             batch.append(sample[seq_idx])
     return meshreg_collate(batch,extend_queries)
+
+
+
+def collate_with_rotation_feature(batch, extend_queries=None):
+    """
+    (시퀀스, 회전_텐서) 튜플로 구성된 배치를 처리하는 함수.
+    """
+    # 1. 시퀀스 샘플 리스트와 회전 특징 텐서를 분리합니다.
+    list_of_sample_sequences = [item[0] for item in batch]
+    rotation_features = [item[1] for item in batch]
+    
+    # 2. 기존 함수를 호출하여 시퀀스 샘플들을 처리합니다.
+    collated_samples = seq_extend_flatten_collate(list_of_sample_sequences, extend_queries)
+
+    # 3. 분리해 둔 회전 특징들을 하나의 배치 텐서로 합칩니다.
+    collated_rotation_tensor = torch.stack(rotation_features, dim=0)
+    
+    # 4. 최종 배치 딕셔너리에 회전 특징 텐서를 추가합니다.
+    collated_samples[TransQueries.ROTATION_FEATURE] = collated_rotation_tensor
+    
+    # print(collated_samples)
+
+    return collated_samples

@@ -46,6 +46,7 @@ def epoch_pass(
     avg_meters = AverageMeters()
      
     for batch_idx, batch in enumerate(tqdm(loader)): 
+                
         if train:
             loss, results, losses = model(batch, epoch=epoch, train=train)
         else:
@@ -160,7 +161,7 @@ def epoch_pass(
         norm_matrix = conf_matrix / (conf_matrix.sum(axis=1, keepdims=True) + 1e-8)
 
         cm_title = f"Confusion Matrix (epoch {epoch})"
-        cm_save_path = f"./gibson/matrix/base_epoch8.png"  # 원하는 경로/이름으로 변경 가능
+        cm_save_path = f"./gibson/matrix/base_epoch{epoch}.png"  # 원하는 경로/이름으로 변경 가능
         save_dir = Path(cm_save_path).parent
         save_dir.mkdir(parents=True, exist_ok=True)
 

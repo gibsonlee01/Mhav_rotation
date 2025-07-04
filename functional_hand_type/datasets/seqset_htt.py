@@ -6,9 +6,12 @@ from torch.distributions.uniform import Uniform
 from torch.distributions.normal import Normal
 from torch.utils.data import Dataset
 from torchvision.transforms import functional as func_transforms
+from pathlib import Path
+import torch
 
 from libyana.transformutils import colortrans, handutils
 from datasets.queries import BaseQueries, TransQueries, one_query_in 
+from config import DATA_ROOT_PATH
 
 class SeqSet(Dataset): 
     def __init__(
@@ -223,6 +226,29 @@ class SeqSet(Dataset):
                 
         sample = self.get_safesample(fidx,seq_txn=seq_txn)
         frame_idx=self.pose_dataset.get_dataidx(fidx)
+        
+        #============ NPY 받아오기 =============#
+        sample_info = self.pose_dataset.get_sample_info(fidx)
+        
+        detail_action_name = sample_info['detail_action_name'] 
+        parts = detail_action_name.split('_')
+        action_category = parts[0]              # 'assemble'
+        subject = parts[-1].lower()                # 'hg'
+        sequence_folder = detail_action_name    # 'assemble_hexNut-bigBolt3_hand_hg'
+        npy_filename = f"{subject}_{detail_action_name}.npy" # 'hg_assemble_hexNut-bigBolt3_hand_hg.npy'
+
+        NPY_PATH = Path(DATA_ROOT_PATH) / action_category / subject / sequence_folder / npy_filename
+        
+        if NPY_PATH.exists():
+            # 파일이 존재하면 로드하고 float32 텐서로 변환
+            rotation_data = np.load(NPY_PATH).astype(np.float32)
+            rotation_tensor = torch.from_numpy(rotation_data)
+        else:
+            # ✅ 파일이 없으면 0으로 채워진 float32 텐서 생성
+            target_len = 500  # 또는 self.ntokens_rotation
+            rotation_tensor = torch.zeros(target_len, dtype=torch.float32)
+            print(f"⚠️ NPY 파일을 찾을 수 없음: {NPY_PATH}")
+
 
 
         sample["dist2query"] = 0
@@ -249,4 +275,4 @@ class SeqSet(Dataset):
             if fut_idx!=cur_idx:
                 cur_idx=fut_idx
 
-        return samples
+        return samples, rotation_tensor

@@ -24,7 +24,7 @@ print('********')
 print('Lets start')
 
 def collate_fn(seq, extend_queries=[]):
-    return collate.seq_extend_flatten_collate(seq,extend_queries)
+    return collate.collate_with_rotation_feature(seq,extend_queries)
     
 def main(args):
     setseeds.set_all_seeds(args.manual_seed)
@@ -152,7 +152,8 @@ def main(args):
             is_demo=False,
             epoch=epoch_idx)
 
-        if epoch_idx%args.snapshot==0:
+        # if epoch_idx%args.snapshot==0:
+        if epoch_idx in [5, 8, 10, 20, 30, 45]:
             modelio.save_checkpoint(
                 {
                     "epoch": epoch_idx, 
@@ -170,7 +171,7 @@ def main(args):
 if __name__ == "__main__":
     torch.multiprocessing.set_sharing_strategy("file_system")
     parser = argparse.ArgumentParser() 
-    parser.add_argument('--experiment_tag',default='base_train') 
+    parser.add_argument('--experiment_tag',default='rotate_train') 
     parser.add_argument('--dataset_folder',default=DATA_ROOT_PATH)
     parser.add_argument('--cache_folder',default='./gibson/ckpts/')
     parser.add_argument('--resume_path',default=None)
