@@ -194,7 +194,7 @@ def epoch_pass(
         
     if not tensorboard_writer is None:
         for k,v in save_dict.items():
-                if k in losses.keys() or k in ['learning_rate','total_loss']:
+                if k in losses.keys() or k in ['learning_rate','total_loss','Proxynce_loss' ]:
                     print(prefix+'/'+k,v,epoch)
                     tensorboard_writer.add_scalar(prefix+'/'+k, v, epoch)
     

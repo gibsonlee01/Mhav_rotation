@@ -171,7 +171,7 @@ def main(args):
 if __name__ == "__main__":
     torch.multiprocessing.set_sharing_strategy("file_system")
     parser = argparse.ArgumentParser() 
-    parser.add_argument('--experiment_tag',default='rotate_train') 
+    parser.add_argument('--experiment_tag',default='proxy_train') 
     parser.add_argument('--dataset_folder',default=DATA_ROOT_PATH)
     parser.add_argument('--cache_folder',default='./gibson/ckpts/')
     parser.add_argument('--resume_path',default=None)
