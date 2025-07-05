@@ -153,7 +153,7 @@ def main(args):
             epoch=epoch_idx)
 
         # if epoch_idx%args.snapshot==0:
-        if epoch_idx in [5, 8, 10, 20, 30, 45]:
+        if epoch_idx in [5, 8, 10, 20, 30, 35, 40, 45]:
             modelio.save_checkpoint(
                 {
                     "epoch": epoch_idx, 
@@ -171,10 +171,10 @@ def main(args):
 if __name__ == "__main__":
     torch.multiprocessing.set_sharing_strategy("file_system")
     parser = argparse.ArgumentParser() 
-    parser.add_argument('--experiment_tag',default='proxy_train') 
+    parser.add_argument('--experiment_tag',default='no_proxy_loss') 
     parser.add_argument('--dataset_folder',default=DATA_ROOT_PATH)
     parser.add_argument('--cache_folder',default='./gibson/ckpts/')
-    parser.add_argument('--resume_path',default=None)
+    parser.add_argument('--resume_path',default="/home/kcy/Desktop/hands_rotation/functional_hand_type/gibson/ckpts/proxy_train/checkpoint_30.pth")
 
     #Transformer parameters
     parser.add_argument("--ntokens_pose", type=int, default=16, help="N tokens for P")
