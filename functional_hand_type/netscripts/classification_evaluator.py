@@ -94,8 +94,6 @@ class SequenceClassificationEvaluator:
                 self.count_matrix_video_seq[gt_id,pred_id]+=1
                 
                 
-            
-            
             num_items_per_label=np.sum(self.count_matrix_video_seq,axis=1,keepdims=True)
             num_items_per_label=np.where(num_items_per_label==0,1,num_items_per_label)
             distribution_matrix_video_seq=self.count_matrix_video_seq/num_items_per_label

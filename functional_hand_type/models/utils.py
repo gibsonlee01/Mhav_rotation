@@ -3,6 +3,8 @@ import torch.nn.functional as torch_f
 import torch.nn as nn
 torch.set_printoptions(precision=4,sci_mode=False)
 from datasets.queries import BaseQueries, TransQueries  
+import numpy as np
+from pathlib import Path
 
 
 
@@ -134,3 +136,78 @@ def compute_hand_loss(est2d,gt2d,estz,gtz,est3d,gt3d,weights,is_single_hand,pose
         hand_losses["recov_joint_angle"] = torch.sum(loss3d_angle) / (loss3d_angle.shape[1]*sum_weights)
 
     return hand_losses
+
+
+def load_or_create_tensor(npy_path: Path, target_len: int) -> torch.Tensor:
+    """
+    주어진 경로(npy_path)에 .npy 파일이 있으면 로드하여 텐서로 변환합니다.
+    파일이 없으면, target_len 길이의 0으로 채워진 텐서를 생성합니다.
+
+    Args:
+        npy_path (Path): 불러올 .npy 파일의 전체 경로
+        target_len (int): 파일이 없을 경우 생성할 텐서의 길이
+
+    Returns:
+        torch.Tensor: 불러오거나 생성된 Pytorch 텐서
+    """
+    if npy_path.exists():
+        # 파일이 존재하면 로드하고 float32 텐서로 변환
+        data = np.load(npy_path).astype(np.float32)
+        tensor = torch.from_numpy(data)
+    else:
+        # 파일이 없으면 0으로 채워진 float32 텐서 생성
+        tensor = torch.zeros(target_len, dtype=torch.float32)
+        print(f"⚠️ NPY 파일을 찾을 수 없음: {npy_path}")
+    
+    return tensor
+
+
+def extract_wrist_cumulative_features(trajectory: np.ndarray, threshold_ratio=0.2) -> np.ndarray:
+    """
+    2D 궤적 데이터에서 누적 각도를 계산하여 반환합니다.
+    접근/후퇴 구간을 고려하여 더 정확한 회전 중심을 찾습니다.
+    
+    Args:
+        trajectory (np.ndarray): (N, 2) 형태의 (x, y) 좌표 시퀀스.
+        threshold_ratio (float): 핵심 동작을 식별하기 위한 각속도 상위 비율.
+
+    Returns:
+        np.ndarray: (N, 1) 형태의 누적 각도 특징 텐서.
+    """
+    # 함수가 비어있는 텐서나 너무 짧은 시퀀스를 받았을 때를 대비
+    if trajectory.shape[0] < 2:
+        return np.zeros((trajectory.shape[0], 1))
+
+    # 1. '대략적인' 각속도 계산
+    temp_center = np.mean(trajectory, axis=0)
+    relative_coords_temp = trajectory - temp_center
+    angles_temp = np.arctan2(relative_coords_temp[:, 1], relative_coords_temp[:, 0])
+    angular_velocity_temp = np.diff(angles_temp)
+    angular_velocity_temp = (angular_velocity_temp + np.pi) % (2 * np.pi) - np.pi
+    
+    # 2. '핵심 동작 구간' 식별
+    abs_ang_vel = np.abs(angular_velocity_temp)
+    # 데이터가 적을 때 quantile 오류 방지
+    if len(abs_ang_vel) == 0:
+        return np.zeros((trajectory.shape[0], 1))
+        
+    threshold = np.quantile(abs_ang_vel, 1.0 - threshold_ratio)
+    core_motion_indices = np.where(abs_ang_vel > threshold)[0]
+    
+    # 3. '진짜' 중심점 계산
+    if len(core_motion_indices) > 0:
+        core_trajectory = trajectory[core_motion_indices]
+        final_center = np.mean(core_trajectory, axis=0)
+    else:
+        final_center = temp_center
+
+    # 4. '진짜' 중심점으로 최종 각속도 및 누적 각도 계산
+    relative_coords_final = trajectory - final_center
+    angles_final = np.arctan2(relative_coords_final[:, 1], relative_coords_final[:, 0])
+    angular_velocity_raw = np.diff(angles_final)
+    angular_velocity = (angular_velocity_raw + np.pi) % (2 * np.pi) - np.pi
+    angular_velocity = np.insert(angular_velocity, 0, 0)
+    cumulative_angle = np.cumsum(angular_velocity)
+    
+    # 누적 각도 텐서만 (N, 1) 형태로 반환
+    return cumulative_angle.reshape(-1, 1)

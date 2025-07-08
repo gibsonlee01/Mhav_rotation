@@ -120,12 +120,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # Base params
-    parser.add_argument('--experiment_tag',default='proxy_eval')    
+    parser.add_argument('--experiment_tag',default='best_eval')    
     parser.add_argument('--is_demo', action="store_true", help="show demo result")  
 
     parser.add_argument('--dataset_folder',default=DATA_ROOT_PATH)
     parser.add_argument('--cache_folder',default='./gibson/ckpts/')
-    parser.add_argument('--resume_path',default='./gibson/ckpts/proxy_train/checkpoint_40.pth')
+    parser.add_argument('--resume_path',default='./gibson/ckpts/proxy_train/checkpoint_8.pth')
 
     #Transformer parameters
     parser.add_argument("--ntokens_pose", type=int, default=16, help="N tokens for P")

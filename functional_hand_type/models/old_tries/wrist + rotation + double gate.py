@@ -84,15 +84,25 @@ class TemporalNet(torch.nn.Module):
             act_hidden='leakyrelu',
             act_final='none'
         )
-        self.final_feature_fusion_layer = torch.nn.Linear(
-            transformer_d_model + 128, transformer_d_model
+        
+        self.wrist_direction_encoder = MultiLayerPerceptron(
+            base_neurons=[500, 256, 128], 
+            out_dim=128, 
+            act_hidden='leakyrelu', 
+            act_final='none'
         )
         
-        # 게이팅 레이어
-        self.rotation_gate = torch.nn.Sequential(
-            torch.nn.Linear(transformer_d_model, 128),
-            torch.nn.Sigmoid() # 출력을 0~1 사이로 만듦
+        self.prior_gate = torch.nn.Sequential(
+            torch.nn.Linear(transformer_d_model, 2), # 출력을 2로 변경
+            torch.nn.Sigmoid()
         )
+        
+        #rotation + wrist
+        self.final_feature_fusion_layer = torch.nn.Linear(
+            transformer_d_model + 128 + 128, transformer_d_model
+        )
+        
+        self.contrastive_embedding_fusion = torch.nn.Linear(128 + 128, 128)
 
         # ✅ 1. ProxyNCA Loss를 위한 프록시 파라미터 추가
         # self.triplet_loss = torch.nn.TripletMarginLoss(margin=1.0, p=2) # 기존 Triplet Loss 삭제
@@ -157,7 +167,9 @@ class TemporalNet(torch.nn.Module):
     def forward(self, batch_flatten, epoch=0, train=True, verbose=False):
         flatten_images=batch_flatten[TransQueries.IMAGE].cuda()
         rotation_features = batch_flatten[TransQueries.ROTATION_FEATURE].cuda()
-
+        wrist_direction_features = batch_flatten[TransQueries.WRIST_DIRECTION_FEATURE].cuda()
+        
+        
         # Loss
         total_loss = torch.Tensor([0]).cuda()
         losses = {}
@@ -202,6 +214,7 @@ class TemporalNet(torch.nn.Module):
 
         # Rotation contrastive
         rotation_embedding = self.rotation_encoder(rotation_features)
+        wrist_direction_embedding = self.wrist_direction_encoder(wrist_direction_features)
 
         # ======== Egocentric Action Module ========
         flatten_ain_feature_olabel=self.olabel_to_action_input(olabel_results["obj_reg_possibilities"])
@@ -216,14 +229,24 @@ class TemporalNet(torch.nn.Module):
         batch_size = batch_flatten[TransQueries.IMAGE].shape[0] // self.ntokens_action
         seq_ain_feature = flatten_ain_feature.view(batch_size, -1, flatten_ain_feature.shape[-1])
         seq_summary_feature = torch.mean(seq_ain_feature, dim=1)
-        gate_values = self.rotation_gate(seq_summary_feature)
-        gated_rotation_embedding = rotation_embedding * gate_values
-
-        # --- 게이트 적용된 특징을 프레임 단위로 확장 및 융합 ---
+        
+        
+        gate_values = self.prior_gate(seq_summary_feature) # Shape: [B, 2]
+        gate_for_rotation = gate_values[:, 0].unsqueeze(1) # Shape: [B, 1]
+        gate_for_wrist = gate_values[:, 1].unsqueeze(1)    # Shape: [B, 1]
+        
+        gated_rotation_embedding = rotation_embedding * gate_for_rotation
+        gated_wrist_direction_embedding = wrist_direction_embedding * gate_for_wrist
         expanded_rotation_embedding = gated_rotation_embedding.unsqueeze(1).expand(-1, self.ntokens_action, -1)
         flatten_rotation_embedding = expanded_rotation_embedding.reshape(-1, 128)
-        flatten_ain_feature = torch.cat((flatten_ain_feature, flatten_rotation_embedding), dim=1)
+        expanded_wrist_embedding = gated_wrist_direction_embedding.unsqueeze(1).expand(-1, self.ntokens_action, -1)
+        flatten_wrist_embedding = expanded_wrist_embedding.reshape(-1, 128)
+
+        flatten_ain_feature = torch.cat(
+            (flatten_ain_feature, flatten_rotation_embedding, flatten_wrist_embedding), dim=1
+        )
         flatten_ain_feature = self.final_feature_fusion_layer(flatten_ain_feature)
+
 
         # --- 최종 Action Transformer 입력 준비 ---
         batch_seq_ain_feature=flatten_ain_feature.contiguous().view(-1,self.ntokens_action,flatten_ain_feature.shape[-1])
@@ -248,8 +271,14 @@ class TemporalNet(torch.nn.Module):
 
         # --- ProxyNCA Loss 계산 ---
         if train:
-            # ✅ 게이트가 적용된 `gated_rotation_embedding`을 사용하도록 수정
-            embeddings = torch_f.normalize(gated_rotation_embedding, p=2, dim=1)
+            # ✅ 두 개의 게이트된 특징을 융합하여 Contrastive Loss 계산
+            combined_gated_embedding = torch.cat(
+                (gated_rotation_embedding, gated_wrist_direction_embedding), dim=1
+            )
+            # 융합된 임베딩을 최종 임베딩 차원으로 매핑
+            final_contrastive_embedding = self.contrastive_embedding_fusion(combined_gated_embedding)
+
+            embeddings = torch_f.normalize(final_contrastive_embedding, p=2, dim=1)
             labels = action_results["action_gt_labels"]
 
             contrastive_loss = self._compute_proxynca_loss(embeddings, labels)

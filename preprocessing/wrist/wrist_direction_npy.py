@@ -108,6 +108,8 @@ def process_dataset_and_save_features():
     try:
         image_folders = sorted(Path(base_input_folder).glob('**/RGB_undistorted/processed_270_480'))
         action_folders = sorted(list(set([p.parent.parent for p in image_folders])))
+        
+        action_folders = [folder for folder in action_folders if 'unscrew' in folder.name]
     except FileNotFoundError:
         print(f"Error: 최상위 입력 폴더를 찾을 수 없습니다: {base_input_folder}")
         return

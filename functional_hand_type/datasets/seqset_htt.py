@@ -12,6 +12,7 @@ import torch
 from libyana.transformutils import colortrans, handutils
 from datasets.queries import BaseQueries, TransQueries, one_query_in 
 from config import DATA_ROOT_PATH
+from models.utils import load_or_create_tensor, extract_wrist_cumulative_features
 
 class SeqSet(Dataset): 
     def __init__(
@@ -59,6 +60,7 @@ class SeqSet(Dataset):
 
     def __len__(self):
         return len(self.pose_dataset)
+    
     
 
 
@@ -235,21 +237,21 @@ class SeqSet(Dataset):
         action_category = parts[0]              # 'assemble'
         subject = parts[-1].lower()                # 'hg'
         sequence_folder = detail_action_name    # 'assemble_hexNut-bigBolt3_hand_hg'
-        npy_filename = f"{subject}_{detail_action_name}.npy" # 'hg_assemble_hexNut-bigBolt3_hand_hg.npy'
-
-        NPY_PATH = Path(DATA_ROOT_PATH) / action_category / subject / sequence_folder / npy_filename
+        target_len = 500
         
-        if NPY_PATH.exists():
-            # 파일이 존재하면 로드하고 float32 텐서로 변환
-            rotation_data = np.load(NPY_PATH).astype(np.float32)
-            rotation_tensor = torch.from_numpy(rotation_data)
-        else:
-            # ✅ 파일이 없으면 0으로 채워진 float32 텐서 생성
-            target_len = 500  # 또는 self.ntokens_rotation
-            rotation_tensor = torch.zeros(target_len, dtype=torch.float32)
-            print(f"⚠️ NPY 파일을 찾을 수 없음: {NPY_PATH}")
+        # --- 1. Rotation 데이터 불러오기 ---
+        rotation_filename = f"{subject}_{detail_action_name}.npy"  # 파일 이름 규칙을 가정
+        rotation_npy_path = Path(DATA_ROOT_PATH) / action_category / subject / sequence_folder / rotation_filename
+        rotation_tensor = load_or_create_tensor(rotation_npy_path, target_len)
 
 
+        # --- 2. Wrist Direction 데이터 불러오기 ---
+        wrist_direction_filename = f"{subject}_{detail_action_name}_wrist_trajectory.npy"  # 파일 이름 규칙을 가정
+        wrist_direction_npy_path = Path(DATA_ROOT_PATH) / action_category / subject / sequence_folder / wrist_direction_filename
+        wrist_direction_tensor = load_or_create_tensor(wrist_direction_npy_path, target_len).numpy()
+        wrist_cumulative_angle_feature_np = extract_wrist_cumulative_features(wrist_direction_tensor)
+        wrist_cumulative_angle_feature = torch.from_numpy(wrist_cumulative_angle_feature_np).float().squeeze()
+        
 
         sample["dist2query"] = 0
         sample["not_padding"] = 1
@@ -275,4 +277,4 @@ class SeqSet(Dataset):
             if fut_idx!=cur_idx:
                 cur_idx=fut_idx
 
-        return samples, rotation_tensor
+        return samples, rotation_tensor, wrist_cumulative_angle_feature

@@ -4,7 +4,7 @@ import os
 
 # --- ⚙️ 시각화할 파일 설정 ⚙️ ---
 # 여기에 방금 생성된 .npy 파일의 전체 경로를 입력하세요.
-npy_file_path = "/media/kcy/3A72CA7272CA3285/data_MHAV/assemble/hg/assemble_hexNut-metalBlock3-spacer-hexBolt_hand_hg/hg_assemble_hexNut-metalBlock3-spacer-hexBolt_hand_hg_wrist_turn.npy"
+npy_file_path = "/media/kcy/3A72CA7272CA3285/data_MHAV/screw/sp/screw_woodChunk-socketCapScrew_allenKey_sp/test2_path.npy"
 # --------------------------------
 
 try:

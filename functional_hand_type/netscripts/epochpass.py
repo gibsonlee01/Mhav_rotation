@@ -156,16 +156,27 @@ def epoch_pass(
         
         # ========================== Confusion Matrix Plot ==========================
         action_metrics = action_evaluator.get_metrics(verbose=True)
-        label_names = [action_evaluator.name_labels[i] for i in range(action_evaluator.num_labels)]
+        # 원본 라벨 이름은 그대로 둡니다.
+        original_label_names = [action_evaluator.name_labels[i] for i in range(action_evaluator.num_labels)]
         conf_matrix = action_evaluator.count_matrix_video_seq if aggregate_sequence else action_evaluator.count_matrix_network_seq
         norm_matrix = conf_matrix / (conf_matrix.sum(axis=1, keepdims=True) + 1e-8)
 
-        cm_title = f"Confusion Matrix (epoch {epoch})"
-        cm_save_path = f"./gibson/matrix/base_epoch{epoch}.png"  # 원하는 경로/이름으로 변경 가능
+        # ==================== 여기부터 수정/추가된 부분 ====================
+        # 1. 각 액션(클래스)별 개수 계산 (혼동 행렬의 가로줄 합)
+        counts_per_class = conf_matrix.sum(axis=1)
+
+        # 2. 새로운 라벨 생성: "라벨 이름 (개수)" 형식
+        # 예: "assemble" -> "assemble (9)"
+        label_names_with_counts = [f"{original_label_names[i]} ({int(count)})" for i, count in enumerate(counts_per_class)]
+        # =================================================================
+
+        cm_title = f"Ours (epoch {epoch})"
+        cm_save_path = f"./gibson/matrix/Ours {epoch}.png"  # 원하는 경로/이름으로 변경 가능
         save_dir = Path(cm_save_path).parent
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        plot_confusion_matrix(norm_matrix, label_names, title=cm_title, save_path=cm_save_path)
+        # 3. plot_confusion_matrix 호출 시 새로 만든 라벨(label_names_with_counts)을 사용
+        plot_confusion_matrix(norm_matrix, conf_matrix, label_names_with_counts, title=cm_title, save_path=cm_save_path)
         # ============================================================================
 
         
@@ -186,10 +197,10 @@ def epoch_pass(
             #     print(k+"hand- MEPE (camera space, mm)/AUC(0-80mm): {:.2f}/{:.3f}".format(save_dict[f"{k}_joints3d_epe_mean"]*1000,save_dict[f"{k}_joints3d_auc"]))
             #     print(k+"hand- MEPE-RA (camera space, mm)/AUC(0-50mm): {:.2f}/{:.3f}".format(save_dict[f"{k}_joints3d_cent_epe_mean"]*1000,save_dict[f"{k}_joints3d_cent_auc"]))
 
-        print("action recall-rate on video, TP: {:d}, Total: {:d}, recall rate {:.2f}".format(int(save_dict["action_video_seq_tp"]),int(save_dict["action_video_seq_total"]),\
+        print("action ACC-rate on video, TP: {:d}, Total: {:d}, ACC rate {:.2f}".format(int(save_dict["action_video_seq_tp"]),int(save_dict["action_video_seq_total"]),\
                         save_dict["action_video_seq_recall_rate_mean"]*100))
         
-        print("Per Sequence action recall-rate on video, TP: {:d}, Total: {:d}, recall rate {:.2f}".format(int(save_dict["action_total_tp"]),int(save_dict["action_total_samples"]),\
+        print("Per Sequence action ACC-rate on video, TP: {:d}, Total: {:d}, ACC rate {:.2f}".format(int(save_dict["action_total_tp"]),int(save_dict["action_total_samples"]),\
                         save_dict["action_recall_rate_mean"]*100))
         
     if not tensorboard_writer is None:
@@ -203,9 +214,16 @@ def epoch_pass(
     return save_dict, avg_meters, evaluator_results
 
 
-def plot_confusion_matrix(matrix, class_names, title="Confusion Matrix", save_path=None, figsize=(8, 6)):
+
+
+def plot_confusion_matrix(matrix_for_color, matrix_for_annot, class_names, title="Confusion Matrix", save_path=None, figsize=(8, 6)):
+    """
+    색상 기준 행렬과 숫자 표시용 행렬을 따로 받는 수정된 함수
+    """
     plt.figure(figsize=figsize)
-    sns.heatmap(matrix, annot=True, fmt=".1f", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
+    # 색상은 matrix_for_color, 숫자는 matrix_for_annot 기준으로 플롯
+    # fmt=".0f" 로 변경하여 숫자를 정수로 표시
+    sns.heatmap(matrix_for_color, annot=matrix_for_annot, fmt=".0f", cmap="Reds", xticklabels=class_names, yticklabels=class_names)
     plt.xlabel("Predicted Label")
     plt.ylabel("True Label")
     plt.title(title)
