@@ -1,5 +1,7 @@
 #Gated + proxynce loss
 
+#음 온도 파라미터를 추가해볼까나 말까나
+
 import torch
 import torch.nn.functional as torch_f
 

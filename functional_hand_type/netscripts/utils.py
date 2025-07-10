@@ -6,7 +6,8 @@ from models.utils import torch2numpy
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
- 
+import seaborn as sns
+
  
 
 def plot_cframe_est_gt(trj_est,trj_gt,frame_id,ax3d,title):     
@@ -158,3 +159,24 @@ def draw_single_run(data,tag):
     plt.grid(ls='--')
     plt.savefig(f'./{tag}_3Dhand.png')
     np.savez(f'./{tag}_3Dhand.npz',x=data['thresholds'],y=data['pck_curve'])
+
+
+
+def plot_confusion_matrix(matrix_for_color, matrix_for_annot, class_names, title="Confusion Matrix", save_path=None, figsize=(8, 6)):
+    """
+    색상 기준 행렬과 숫자 표시용 행렬을 따로 받는 수정된 함수
+    """
+    plt.figure(figsize=figsize)
+    # 색상은 matrix_for_color, 숫자는 matrix_for_annot 기준으로 플롯
+    # fmt=".0f" 로 변경하여 숫자를 정수로 표시
+    sns.heatmap(matrix_for_color, annot=matrix_for_annot, fmt=".0f", cmap="Reds", xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+    plt.title(title)
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300)
+        print(f"[✔] Confusion matrix saved at: {save_path}")
+    else:
+        plt.show()
+    plt.close()

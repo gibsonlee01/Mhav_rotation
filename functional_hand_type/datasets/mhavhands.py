@@ -12,7 +12,7 @@ from PIL import Image, ImageFile
 from datasets import mhavutils
 from datasets.queries import BaseQueries,TransQueries, get_trans_queries
 from datasets import mhavutils
-from config import DATA_ROOT_PATH
+from config import DATA_ROOT_PATH, ANNOTATION_FILENAME
 
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -126,7 +126,7 @@ class MHAVhands(object):
 
         # Load hand type labels
         self.num_handtypes = 39
-        self.hand_labels, self.subjects_infos = mhavutils.get_all_hand_labels(self.root + "/annotation_0620_final.xlsx", self.rgb_root, self.rgb_template)
+        self.hand_labels, self.subjects_infos = mhavutils.get_all_hand_labels(self.root+ "/" +ANNOTATION_FILENAME, self.rgb_root, self.rgb_template)
         # print("self.hand_labels keys:", list(self.hand_labels))  # 현재 hand_labels에 어떤 키들이 있는지 확인
         # print("self.subjects_labels keys:", list(self.subjects_infos))
         # self.mhav_hand_map = {-1: 0, 1: 1, 2: 2, 3: 3, 4: 4, 8: 5, 9: 6, 12: 7, 14: 8, 15: 9, 17: 10, 18: 11, 22: 12, 23: 13, 27: 14, 29: 15, 32: 16, 33: 17, 34: 18, 36: 19, 38: 20, 39: 21, 40: 22, 41: 23, 42: 24, 43: 25, 44: 26, 45: 27, 46: 28, 47: 29, 48: 30, 49: 31, 50: 32, 51: 33, 52: 34, 53: 35, 54: 36, 55: 37, 56: 38}

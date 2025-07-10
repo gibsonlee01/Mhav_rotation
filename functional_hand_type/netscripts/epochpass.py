@@ -7,7 +7,7 @@ from netscripts import position_evaluator
 from netscripts.classification_evaluator import SequenceClassificationEvaluator, FrameClassificationEvaluator
 from netscripts.position_evaluator import ZimEval
 from pathlib import Path
-
+from netscripts.utils import plot_confusion_matrix
 
 def epoch_pass(
     loader,
@@ -25,6 +25,7 @@ def epoch_pass(
     is_single_hand,
     is_demo,
     epoch,
+    exp_id
 
 ):
     if train:
@@ -171,7 +172,7 @@ def epoch_pass(
         # =================================================================
 
         cm_title = f"Ours (epoch {epoch})"
-        cm_save_path = f"./gibson/matrix/Ours {epoch}.png"  # 원하는 경로/이름으로 변경 가능
+        cm_save_path = f"./gibson/matrix/{exp_id}/{exp_id} {epoch}.png"  # 원하는 경로/이름으로 변경 가능
         save_dir = Path(cm_save_path).parent
         save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -213,24 +214,3 @@ def epoch_pass(
     
     return save_dict, avg_meters, evaluator_results
 
-
-
-
-def plot_confusion_matrix(matrix_for_color, matrix_for_annot, class_names, title="Confusion Matrix", save_path=None, figsize=(8, 6)):
-    """
-    색상 기준 행렬과 숫자 표시용 행렬을 따로 받는 수정된 함수
-    """
-    plt.figure(figsize=figsize)
-    # 색상은 matrix_for_color, 숫자는 matrix_for_annot 기준으로 플롯
-    # fmt=".0f" 로 변경하여 숫자를 정수로 표시
-    sns.heatmap(matrix_for_color, annot=matrix_for_annot, fmt=".0f", cmap="Reds", xticklabels=class_names, yticklabels=class_names)
-    plt.xlabel("Predicted Label")
-    plt.ylabel("True Label")
-    plt.title(title)
-    plt.tight_layout()
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300)
-        print(f"[✔] Confusion matrix saved at: {save_path}")
-    else:
-        plt.show()
-    plt.close()
